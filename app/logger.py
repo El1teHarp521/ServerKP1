@@ -4,18 +4,11 @@ import logging
 def setup_logger():
     logger = logging.getLogger("my_app")
     logger.setLevel(logging.DEBUG)
-
-    # Консольный обработчик
     ch = logging.StreamHandler()
     ch.setLevel(logging.DEBUG)
-
-    # Формат логов
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     ch.setFormatter(formatter)
-
-    # Обработчик к логгеру
     logger.addHandler(ch)
-
     return logger
 
 
