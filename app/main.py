@@ -1,71 +1,89 @@
-from fastapi import FastAPI, HTTPException
+from typing import Annotated, List
+
+from fastapi import FastAPI, Form, Query, UploadFile
 
 from app.config import load_config
 from app.logger import logger
-from app.models import User
+from app.models import Item, User, UserResponse
 
 
+# Загружаем конфигурацию
 config = load_config()
 
 app = FastAPI(
-    title="ServerKP1 - Practice 2",
-    description="Работа с эндпоинтами, параметрами пути, запроса и тела",
+    title="ServerKP1 - Practice 3",
+    description="Формы, файлы, вложенные модели и продвинутые параметры",
     version="1.0.0",
 )
-
-# Фейковая база данных
-fake_db = [
-    {"username": "artur", "user_info": "любит колбасу"},
-    {"username": "kolya", "user_info": "любит петь"},
-    {"username": "katya", "user_info": "играет в футбол"},
-    {"username": "olga", "user_info": "изучает python"},
-]
 
 
 @app.get("/")
 async def root():
     logger.info("Запрос к корневому эндпоинту")
-    return {"message": "Welcome to Practice 2 API", "docs": "/docs"}
+    return {"message": "Welcome to Practice 3 API", "docs": "/docs"}
 
 
-# Параметры ЗАПРОСА
-@app.get("/users/")
-async def get_users(limit: int = 10, skip: int = 0):
-    logger.info(f"Запрос списка пользователей: limit={limit}, skip={skip}")
-    return fake_db[skip : skip + limit]
+#  ОБРАБОТКА ФОРМ (Form)
+@app.post("/register/")
+async def register_user(
+    username: Annotated[str, Form(...)],
+    email: Annotated[str, Form(...)],
+    age: Annotated[int, Form(...)],
+    password: Annotated[str, Form(...)],
+):
+    logger.info(f"Регистрация через форму: {username}")
+    return {
+        "username": username,
+        "email": email,
+        "age": age,
+        "password_length": len(password),
+    }
 
 
-# Параметры ПУТИ
-@app.get("/users/{username}")
-async def get_user_by_name(username: str):
-    logger.info(f"Поиск пользователя: {username}")
-    for user in fake_db:
-        if user["username"] == username:
-            return user
-
-    logger.warning(f"Пользователь {username} не найден")
-    raise HTTPException(status_code=404, detail="User not found")
+#  ВЛОЖЕННЫЕ МОДЕЛИ И JSON (response_model)
+@app.post("/users/nested", response_model=UserResponse)
+async def create_nested_user(user: User):
+    logger.info(f"Создание юзера с вложенной моделью: {user.name}")
+    # Возвращаем словарь, который FastAPI сам преобразует в модель UserResponse
+    return {"message": f"Пользователь {user.name} создан!", "user": user}
 
 
-# Параметры ТЕЛА
-@app.post("/add_user", response_model=User)
-async def create_user(user: User):
-    logger.info(f"Добавление нового пользователя: {user.username}")
-    new_user = {"username": user.username, "user_info": user.user_info}
-    fake_db.append(new_user)
-    return user
+#  ЗАГРУЗКА ФАЙЛОВ (UploadFile)
+@app.post("/uploadfile/")
+async def create_upload_file(file: UploadFile):
+    logger.info(f"Загрузка файла: {file.filename}")
+    content = await file.read()  # Читаем файл в память
+    return {
+        "filename": file.filename,
+        "size_bytes": len(content),
+        "content_type": file.content_type,
+    }
 
 
-# Удалени
-@app.delete("/users/{username}")
-async def delete_user(username: str):
-    logger.info(f"Запрос на удаление пользователя: {username}")
-    global fake_db
-    user_to_delete = next((u for u in fake_db if u["username"] == username), None)
+@app.post("/multiple-files/")
+async def upload_multiple_files(files: List[UploadFile]):
+    logger.info(f"Загрузка нескольких файлов. Количество: {len(files)}")
+    return {"filenames": [file.filename for file in files]}
 
-    if user_to_delete:
-        fake_db = [u for u in fake_db if u["username"] != username]
-        return {"message": f"User {username} deleted successfully"}
 
-    logger.warning(f"Попытка удаления несуществующего пользователя: {username}")
-    raise HTTPException(status_code=404, detail="User not found")
+# ПРОДВИНУТЫЕ ПАРАМЕТРЫ ЗАПРОСА (Query) и ОБЪЕКТ ITEM
+@app.post("/items/")
+async def create_item(item: Item):
+    logger.info(f"Создан Item: {item.name}")
+    return item
+
+
+@app.get("/items/")
+async def read_items(
+    skip: Annotated[int, Query(alias="start", ge=0)] = 0,
+    limit: Annotated[int, Query(le=100)] = 10,
+):
+    logger.info(f"Запрос списка Items. start={skip}, limit={limit}")
+    return {"skip_or_start": skip, "limit": limit}
+
+
+# СМЕШИВАНИЕ ПАРАМЕТРОВ ПУТИ И ЗАПРОСА
+@app.get("/users/{user_id}")
+async def read_user(user_id: int, is_admin: bool = False):
+    logger.info(f"Запрос юзера {user_id}. Админ: {is_admin}")
+    return {"user_id": user_id, "is_admin": is_admin}
